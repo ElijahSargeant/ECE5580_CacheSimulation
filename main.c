@@ -35,6 +35,20 @@
  * *****************************************************************************
 */
 
+void printResults(int cacheLevel, int hits, int victimHits, int cold, int capacity, int conflict) 
+{
+    printf("L%u Cache Stats:\t%u\t%u\t%u\t%u\t%u\n", cacheLevel, hits, victimHits, cold, capacity, conflict);
+    printf("\n");
+}
+
+char* concat(const char *s1, const char *s2)
+{
+    char *result = malloc(strlen(s1) + strlen(s2) + 1);
+    strcpy(result, s1);
+    strcat(result, s2);
+    return result;
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -43,7 +57,7 @@ int main (int argc, char *argv[])
     char* benchmark;
     unsigned int accesses, s1, a1, b1, v1, s2, a2, b2, v2;
 
-    benchmark = argv[1];
+    benchmark = concat(concat("CacheonlyTraces/Traces/", argv[1]), ".trace");
     accesses = atoi(argv[2]);
 
     s1 = atoi(argv[3]);
@@ -56,7 +70,9 @@ int main (int argc, char *argv[])
     b2 = atoi(argv[9]);
     v2 = atoi(argv[10]);
 
-    if((s1 == 0) || (a1 == 0) || (b1 == 0) || (v1 == 0) || (s2 == 0) || (a2 == 0) || (b2 == 0) || (v2 == 0)) 
+    printf(benchmark);
+
+    if((s1 == 0) || (a1 == 0) || (b1 == 0) || (s2 == 0) || (a2 == 0) || (b2 == 0)) 
     {
         printf("Inavlid parameters, one or more inputs was an invalid string or 0!");
         exit(0);
@@ -72,8 +88,28 @@ int main (int argc, char *argv[])
     int hitsL1, victimHitsL1, coldL1, capacityL1, conflictL1;
     int hitsL2, victimHitsL2, coldL2, capacityL2, conflictL2;
 
+    /*
+    The cache is represented as an a array of data, with 1:1 correspondance to address and index
+    Another fully associative cache of the same size is created to help detemine miss types
+    Finally, a double array is created to hold the address history of the cache data writes to determine miss types 
+    */
+    unsigned int* cacheL1, victimCacheL1, cacheL2, victimCacheL2, fullyAssociativeL1, fullyAssociativeL2;
 
-    for(int i=0; i<accesses; i++)
+    cacheL1 = (unsigned int*) malloc(sizeof(unsigned int) * s1);
+    cacheL2 = (unsigned int*) malloc(sizeof(unsigned int) * s2);
+
+    if (v1 != 0) {victimCacheL1 = (unsigned int*) malloc(sizeof(unsigned int) * v1);}
+    if (v2 != 0) {victimCacheL2 = (unsigned int*) malloc(sizeof(unsigned int) * v2);}
+
+    fullyAssociativeL1 = (unsigned int*) malloc(sizeof(cacheL1));
+    fullyAssociativeL2 = (unsigned int*) malloc(sizeof(cacheL2));
+
+    //allocates a dynamic 2D array to hold the history of caches at their indices
+    unsigned int (*historyCacheL1)[accesses] = malloc(sizeof(unsigned int[s1][accesses]));
+    unsigned int (*historyCacheL2)[accesses] = malloc(sizeof(unsigned int[s1][accesses]));
+
+
+    for(int i=0; i<100; i++)
     {
         //address is 4 bytes (int)
         fread(&address, 1, 4, fin);
@@ -84,16 +120,25 @@ int main (int argc, char *argv[])
         accessed, while the variable ‘operation’ contains the values ‘r’ for
         a read or ‘w’ for a write. */
 
+        //now, check the address against the L1 address. If equal, hit. else, got to L1 victim and check
+
+        //the largest address below the one you need that is multiple of 64 is the cache line
+        //EX: 16384 cache size in bytes, line size of 64B, we have 256 lines. With a
+        
+        printf("address: %u operation: %c\n", address, operation);
+
 
 
     }
+
+    free(cacheL1);
+    free(cacheL2);
+    free(fullyAssociativeL1);
+    free(fullyAssociativeL2);
+
+    if (victimCacheL1 != 0) {free(victimCacheL1);}
+    if (victimCacheL2 != 0) {free(victimCacheL2);}
+
   
     return 0;
-}
-
-
-void printResults(int cacheLevel, int hits, int victimHits, int cold, int capacity, int conflict) 
-{
-    printf("L%u Cache Stats:\t%u\t%u\t%u\t%u\t%u\n", cacheLevel, hits, victimHits, cold, capacity, conflict);
-    printf("\n");
 }
