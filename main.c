@@ -370,6 +370,9 @@ int main (int argc, char *argv[])
     {
         address_info L1_info = {0,0,0};
         address_info L2_info = {0,0,0};
+
+        address_info fa_L1_info = {0,0,0};
+        address_info fa_L2_info = {0,0,0};
 //        printf("L1 stats:\nindex length:%x\ntag length: %x\nblock offset: %x\nline size: %x\n",index_bits1,tag_bits1,block_offset1,line_size1);
  //       printf("L2 stats:\nindex length:%x\ntag length: %x\nblock offset: %x\nline size: %x\n",index_bits2,tag_bits2,block_offset2,line_size2);
         
@@ -383,6 +386,15 @@ int main (int argc, char *argv[])
         * accessed, while the variable ‘operation’ contains the values ‘r’ for
         * a read or ‘w’ for a write. 
         */
+
+       //setting up FA L1 & L2; only tag and bloffset
+       fa_L1_info.tag = (address & (get_mask(tag_bits1)<<(block_offset1)))>>(block_offset1);
+       fa_L1_info.block_offset = address & get_mask(block_offset1);
+       fa_L1_info.index = 0;
+
+       fa_L2_info.tag = (address & (get_mask(tag_bits2)<<(block_offset2)))>>(block_offset2);
+       fa_L2_info.block_offset = address & get_mask(block_offset2);
+       fa_L2_info.index = 0;
         
         L1_info.tag = (address & (get_mask(tag_bits1)<<(block_offset1+index_bits1)))>>(block_offset1+index_bits1);
         L2_info.tag= (address & (get_mask(tag_bits2)<<(block_offset2+index_bits2)))>>(block_offset2+index_bits2);
@@ -402,7 +414,8 @@ int main (int argc, char *argv[])
                 switch(operation)
                 {
                     case('r'):
-                            if((L1->lines[L1_info.index].valid == 1)&&(L1->lines[L1_info.index].tag == L1_info.tag))
+
+                            if((L1->lines[L1_info.tag].valid == 1)&&(L1->lines[L1_info.tag].tag == L1_info.tag))
                             {
                                 printf("hit\n");
                                 ++L1->stats.hits;
@@ -410,12 +423,92 @@ int main (int argc, char *argv[])
                                 L1->lines[L1_info.index].last_used_time = total_accesses;
                             }else
                             {
-                                printf("miss\n");
-                                L1->lines[L1_info.index].valid = 1;
-                                L1->lines[L1_info.index].tag = L1_info.tag;
+                                //Need to verify if cold, capacity, or conflict
+                                
+                                //If valid==0, cold miss
+                                if(L1->lines[L1_info.tag].valid == 0) {
+                                    ++L1->stats.cold_misses;
+
+                                    //set both valids high
+                                    L1->lines[L1_info.tag].valid = 1;
+                                    fa_L1->lines[L1_info.index].valid = 1;
+                                    printf("cold miss\n");
+
+                                //Conflict miss if fully associative cache would hit instead of miss
+                                } else if ((fa_L1->lines[L1_info.tag].valid == 1)&&(fa_L1->lines[fa_L1_info.index].tag == fa_L1_info.tag)) {
+                                    ++L1->stats.conflict_misses;
+                                    printf("conflict miss\n");
+
+                                //Else capacity miss
+                                } else {
+                                    ++L1->stats.capacity_misses;
+                                    printf("capacity miss\n");
+                                }
+
+                                //bring desired data into cache now
+                                //find oldest data in modulo addresses (using modulo cache size / block size)
+                                //EX: 16kB cache size / 64B line size = 256, so 256 spots each 64B long for stuff to go in
+                                //make sure we load in line size worth of stuff too; so from (address - lineSize/2) to (address + lineSize/2)
+                                uint16_t direct_set = address % (size1 / line_size1);
+
+                                uint16_t oldest_block = 0;
+                                for (int i = direct_set; i < size1; i += direct_set)
+                                {
+                                    if (L1->lines[i].last_used_time > oldest_block)
+                                        oldest_block = L1->lines[i].last_used_time;
+                                }
+
+                                // now update that block with new data and set LRU
+                                for (int i = (address - line_size1 / 2); i < (address + line_size1 / 2); i++)
+                                {
+                                    L1->lines[L1_info.tag].tag = i;
+                                    L1->lines[L1_info.tag].last_used_time = total_accesses;
+
+                                    fa_L1->lines[L1_info.index].tag = i;
+                                    fa_L1->lines[L1_info.index].last_used_time = total_accesses;
+                                }
+
+                                //increment misses/accesses
                                 ++L1->stats.total_misses;
                                 ++L1->stats.total_accesses;
-                                L1->lines[L1_info.index].last_used_time = total_accesses;
+
+                                // now we check L2 hit or miss
+                                switch (L2->type)
+                                {
+                                case (direct_mapped):
+                                    switch (operation)
+                                    {
+                                    case ('r'):
+
+                                        break;
+                                    case ('w'):
+
+                                        break;
+                                    }
+                                    break;
+                                case (associative):
+                                    switch (operation)
+                                    {
+                                    case ('r'):
+
+                                        break;
+                                    case ('w'):
+
+                                        break;
+                                    }
+                                    break;
+                                case (fully_associative):
+                                    switch (operation)
+                                    {
+                                    case ('r'):
+
+                                        break;
+                                    case ('w'):
+
+                                        break;
+                                    }
+                                    break;
+                                }
                             }
                         break;
                     case('w'):
@@ -446,42 +539,7 @@ int main (int argc, char *argv[])
                 }
                 break;
         }
-        switch(L2->type)
-        {
-            case(direct_mapped):
-                switch(operation)
-                {
-                    case('r'):
-
-                        break;
-                    case('w'):
-
-                        break;
-                }
-                break;
-            case(associative):
-                switch(operation)
-                {
-                    case('r'):
-
-                        break;
-                    case('w'):
-
-                        break;
-                }
-                break;
-            case(fully_associative):
-                switch(operation)
-                {
-                    case('r'):
-
-                        break;
-                    case('w'):
-
-                        break;
-                }
-                break;
-        }
+        
         //now, check the address against index_bits1 = log2(ASSOC_cache(L1)->n_sets); the L1 address. If equal, hit. else, got to L1 victim and check
 
         //the largest address below the one you need that is multiple of 64 is the cache line
