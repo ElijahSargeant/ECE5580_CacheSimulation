@@ -1,8 +1,8 @@
 CC = gcc
-CFLAGS = -pedantic -Werror -Og -g
+CFLAGS = -pedantic -Wall -Werror -Ofast -g
 LIBS = -lm
-SRC = main.c
-BIN = cache
+SRC = Cache.Grp1.c
+BIN = Cache.Grp1
 
 all: $(BIN)
 
